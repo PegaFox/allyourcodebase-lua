@@ -66,11 +66,6 @@ pub fn build(b: *Build) !void {
         t.root_module.link_libc = true;
         t.root_module.addIncludePath(lua_src.path("src"));
         switch (target.result.os.tag) {
-            .aix => {
-                t.root_module.addCMacro("LUA_USE_POSIX", "");
-                t.root_module.addCMacro("LUA_USE_DLOPEN", "");
-                t.linkSystemLibrary("dl");
-            },
             .freebsd, .netbsd, .openbsd => {
                 t.root_module.addCMacro("LUA_USE_LINUX", "");
                 t.root_module.addCMacro("LUA_USE_READLINE", "");
@@ -92,12 +87,6 @@ pub fn build(b: *Build) !void {
                 t.root_module.addCMacro("LUA_USE_MACOSX", "");
                 t.root_module.addCMacro("LUA_USE_READLINE", "");
                 t.linkSystemLibrary("readline");
-            },
-            .solaris => {
-                t.root_module.addCMacro("LUA_USE_POSIX", "");
-                t.root_module.addCMacro("LUA_USE_DLOPEN", "");
-                t.root_module.addCMacro("_REENTRANT", "");
-                t.linkSystemLibrary("dl");
             },
             else => {},
         }
