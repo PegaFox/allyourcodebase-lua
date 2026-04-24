@@ -26,29 +26,31 @@ pub fn build(b: *Build) !void {
     const lua_src = b.dependency("lua", .{});
 
     const lib =
-        b.addStaticLibrary(artifactOptions(
+        b.addLibrary(artifactOptions(
+            b,
             .{ .shared = false },
             .{ .target = target, .optimize = optimize },
         ));
     const shared = if (build_shared)
-        b.addSharedLibrary(artifactOptions(
+        b.addLibrary(artifactOptions(
+            b,
             .{ .shared = true },
             .{ .target = target, .optimize = optimize },
         ))
     else
         null;
-    const exe = b.addExecutable(artifactOptions(.exe, .{
+    const exe = b.addExecutable(artifactOptions(b, .exe, .{
         .target = target,
         .optimize = optimize,
     }));
-    const exec = b.addExecutable(artifactOptions(.exec, .{
+    const exec = b.addExecutable(artifactOptions(b, .exec, .{
         .target = target,
         .optimize = optimize,
     }));
     if (!target.result.isMinGW()) {
-        lib.linkSystemLibrary("m");
-        exe.linkSystemLibrary("m");
-        exec.linkSystemLibrary("m");
+        lib.root_module.linkSystemLibrary("m", .{});
+        exe.root_module.linkSystemLibrary("m", .{});
+        exec.root_module.linkSystemLibrary("m", .{});
     }
     const build_targets = [_]?*Build.Step.Compile{
         lib,
@@ -61,8 +63,8 @@ pub fn build(b: *Build) !void {
         if (tr == null)
             continue;
         const t = tr.?;
-        t.linkLibC();
-        t.addIncludePath(lua_src.path("src"));
+        t.root_module.link_libc = true;
+        t.root_module.addIncludePath(lua_src.path("src"));
         switch (target.result.os.tag) {
             .aix => {
                 t.root_module.addCMacro("LUA_USE_POSIX", "");
@@ -180,50 +182,44 @@ const ArtifactTargetOptions = struct {
     target: ResolvedTarget,
     optimize: OptimizeMode,
 };
-fn artifactOptions(comptime options: ArtifactTarget, opts: ArtifactTargetOptions) switch (options) {
+fn artifactOptions(b: *Build, comptime options: ArtifactTarget, opts: ArtifactTargetOptions) switch (options) {
     .exe, .exec => Build.ExecutableOptions,
-    .shared => |shared| if (shared)
-        Build.SharedLibraryOptions
-    else
-        Build.StaticLibraryOptions,
+    .shared => Build.LibraryOptions
 } {
     const t = opts.target.result.os.tag;
     return switch (options) {
-        .shared => |shared| if (shared) blk: {
-            switch (t) {
-                .windows => break :blk .{
-                    .name = lib_name ++ "54",
-                    .target = opts.target,
-                    .optimize = opts.optimize,
-                    .strip = true,
-                },
-                else => break :blk .{
-                    .name = lib_name,
-                    .target = opts.target,
-                    .optimize = opts.optimize,
-                },
-            }
-        } else blk: {
-            switch (t) {
-                else => break :blk .{
-                    .name = lib_name,
-                    .target = opts.target,
-                    .optimize = opts.optimize,
-                },
-            }
+        .shared => |shared| if (shared and t == .windows) .{
+            .name = lib_name ++ "54",
+            .linkage = if (shared) .dynamic else .static,
+            .root_module = b.createModule(.{
+                .target = opts.target,
+                .optimize = opts.optimize,
+                .strip = true,
+            }),
+        } else .{
+            .name = lib_name,
+            .linkage = if (shared) .dynamic else .static,
+            .root_module = b.createModule(.{
+                .target = opts.target,
+                .optimize = opts.optimize,
+            }),
         },
         .exe => switch (t) {
             else => .{
                 .name = exe_name,
-                .target = opts.target,
-                .optimize = opts.optimize,
+                .root_module = b.createModule(.{
+                    .target = opts.target,
+                    .optimize = opts.optimize,
+                }),
             },
         },
         .exec => switch (t) {
             else => .{
                 .name = compiler_name,
-                .target = opts.target,
-                .optimize = opts.optimize,
+                .root_module = b.createModule(.{
+                    .target = opts.target,
+                    .optimize = opts.optimize,
+                }),
             },
         },
     };
