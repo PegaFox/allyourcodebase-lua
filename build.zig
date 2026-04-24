@@ -69,24 +69,24 @@ pub fn build(b: *Build) !void {
             .freebsd, .netbsd, .openbsd => {
                 t.root_module.addCMacro("LUA_USE_LINUX", "");
                 t.root_module.addCMacro("LUA_USE_READLINE", "");
-                t.addIncludePath(.{ .cwd_relative = "/usr/include/edit" });
-                t.linkSystemLibrary("edit");
+                t.root_module.addIncludePath(.{ .cwd_relative = "/usr/include/edit" });
+                t.root_module.linkSystemLibrary("edit", .{});
             },
             .ios => {
                 t.root_module.addCMacro("LUA_USE_IOS", "");
             },
             .linux => {
                 t.root_module.addCMacro("LUA_USE_LINUX", "");
-                t.linkSystemLibrary("dl");
+                t.root_module.linkSystemLibrary("dl", .{});
                 if (use_readline.?) {
                     t.root_module.addCMacro("LUA_USE_READLINE", "");
-                    t.linkSystemLibrary("readline");
+                    t.root_module.linkSystemLibrary("readline", .{});
                 }
             },
             .macos => {
                 t.root_module.addCMacro("LUA_USE_MACOSX", "");
                 t.root_module.addCMacro("LUA_USE_READLINE", "");
-                t.linkSystemLibrary("readline");
+                t.root_module.linkSystemLibrary("readline", .{});
             },
             else => {},
         }
@@ -96,7 +96,7 @@ pub fn build(b: *Build) !void {
         exe.root_module.addCMacro("LUA_BUILD_AS_DLL", "");
     }
     if (shared) |s| {
-        s.addCSourceFiles(.{
+        s.root_module.addCSourceFiles(.{
             .root = lua_src.path("src"),
             .files = &base_src,
             .flags = &cflags,
@@ -109,7 +109,7 @@ pub fn build(b: *Build) !void {
         );
     }
 
-    lib.addCSourceFiles(.{
+    lib.root_module.addCSourceFiles(.{
         .root = lua_src.path("src"),
         .files = &base_src,
         .flags = &cflags,
@@ -121,26 +121,26 @@ pub fn build(b: *Build) !void {
         .{ .include_extensions = &lua_inc },
     );
 
-    exe.addCSourceFile(.{
+    exe.root_module.addCSourceFile(.{
         .file = lua_src.path("src/lua.c"),
         .flags = &cflags,
     });
 
-    exec.addCSourceFile(.{
+    exec.root_module.addCSourceFile(.{
         .file = lua_src.path("src/luac.c"),
         .flags = &cflags,
     });
 
     if (shared) |s| {
-        exe.linkLibrary(s);
+        exe.root_module.linkLibrary(s);
         b.installArtifact(s);
     } else {
-        exe.linkLibrary(lib);
+        exe.root_module.linkLibrary(lib);
         b.installArtifact(lib);
     }
 
     b.installArtifact(exe);
-    exec.linkLibrary(lib);
+    exec.root_module.linkLibrary(lib);
     b.installArtifact(exec);
 
     b.installDirectory(.{
